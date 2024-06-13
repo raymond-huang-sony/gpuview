@@ -15,7 +15,7 @@ except ImportError:
 
 
 ABS_PATH = os.path.dirname(os.path.realpath(__file__))
-HOSTS_DB = os.path.join('.', 'gpuhosts.db')
+HOSTS_DB = os.path.join(ABS_PATH, 'gpuhosts.db')
 SAFE_ZONE = False  # Safe to report all details.
 
 
