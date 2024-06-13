@@ -38,7 +38,7 @@
         <div class="container-fluid" style="padding: 70px 40px 40px 40px">
             <div class="row">
                 % for gpustat in gpustats:
-                % for gpu in gpustat.get('gpus', []):
+                % for gpu in gpustat.get('gpus.duplicate', []):
                 <div class="col-xl-3 col-md-4 col-sm-6 mb-3">
                     <div class="card text-white {{ gpu.get('flag', '') }} o-hidden h-100">
                         <div class="card-body">
@@ -79,6 +79,9 @@
                 <div class="card-header">
                     <i class="fa fa-table"></i> All Hosts and GPUs</div>
                 <div class="card-body">
+                    <p>
+                        <input class="form-control" id="hostFilter" type="text" placeholder="Filter by Host...">
+                    </p>
                     <div class="table-responsive">
                         <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
                             <thead>
@@ -128,6 +131,17 @@
             crossorigin="anonymous"></script>
         <script src="https://cdn.datatables.net/1.10.16/js/jquery.dataTables.min.js"></script>
         <script src="https://cdn.datatables.net/1.10.16/js/dataTables.bootstrap4.min.js"></script>
+        <script>
+$(document).ready(function(){
+  $("#hostFilter").on("keyup", function() {
+    var value = $(this).val().toLowerCase();
+    console.log('Filtering')
+    $("#dataTable tr").filter(function() {
+      $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+    });
+  });
+});
+        </script>
     </div>
 </body>
 

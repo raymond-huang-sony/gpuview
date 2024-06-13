@@ -24,6 +24,47 @@ def safe_zone(safe=False):
     SAFE_ZONE = safe
 
 
+def parse_stat(stat):
+    delete_list = []
+    for gpu_id, gpu in enumerate(stat['gpus']):
+        if type(gpu['processes']) is str:
+            delete_list.append(gpu_id)
+            continue
+        gpu['memory'] = round(float(gpu['memory.used']) /
+                              float(gpu['memory.total']) * 100)
+        if SAFE_ZONE:
+            gpu['users'] = len(set([p['username']
+                                    for p in gpu['processes']]))
+            user_process = [
+                '%s(%s,%sM)' % (p['username'],
+                                p['command'], p['gpu_memory_usage'])
+                for p in gpu['processes']
+            ]
+            gpu['user_processes'] = ' '.join(user_process)
+        else:
+            gpu['users'] = len(set([p['username']
+                                    for p in gpu['processes']]))
+            processes = len(gpu['processes'])
+            gpu['user_processes'] = '%s/%s' % (gpu['users'], processes)
+            gpu.pop('processes', None)
+            gpu.pop("uuid", None)
+            gpu.pop("query_time", None)
+
+        gpu['flag'] = 'bg-primary'
+        if gpu['temperature.gpu'] > 75:
+            gpu['flag'] = 'bg-danger'
+        elif gpu['temperature.gpu'] > 50:
+            gpu['flag'] = 'bg-warning'
+        elif gpu['temperature.gpu'] > 25:
+            gpu['flag'] = 'bg-success'
+
+    if delete_list:
+        for gpu_id in delete_list:
+            stat['gpus'].pop(gpu_id)
+
+    return stat
+
+
 def my_gpustat():
     """
     Returns a [safe] version of gpustat for this host.
@@ -35,48 +76,10 @@ def my_gpustat():
     Returns:
         dict: gpustat
     """
-
     try:
         from gpustat import GPUStatCollection
         stat = GPUStatCollection.new_query().jsonify()
-        delete_list = []
-        for gpu_id, gpu in enumerate(stat['gpus']):
-            if type(gpu['processes']) is str:
-                delete_list.append(gpu_id)
-                continue
-            gpu['memory'] = round(float(gpu['memory.used']) /
-                                  float(gpu['memory.total']) * 100)
-            if SAFE_ZONE:
-                gpu['users'] = len(set([p['username']
-                                        for p in gpu['processes']]))
-                user_process = [
-                    '%s(%s,%sM)' % (p['username'],
-                                    p['command'], p['gpu_memory_usage'])
-                    for p in gpu['processes']
-                ]
-                gpu['user_processes'] = ' '.join(user_process)
-            else:
-                gpu['users'] = len(set([p['username']
-                                        for p in gpu['processes']]))
-                processes = len(gpu['processes'])
-                gpu['user_processes'] = '%s/%s' % (gpu['users'], processes)
-                gpu.pop('processes', None)
-                gpu.pop("uuid", None)
-                gpu.pop("query_time", None)
-
-            gpu['flag'] = 'bg-primary'
-            if gpu['temperature.gpu'] > 75:
-                gpu['flag'] = 'bg-danger'
-            elif gpu['temperature.gpu'] > 50:
-                gpu['flag'] = 'bg-warning'
-            elif gpu['temperature.gpu'] > 25:
-                gpu['flag'] = 'bg-success'
-
-        if delete_list:
-            for gpu_id in delete_list:
-                stat['gpus'].pop(gpu_id)
-
-        return stat
+        return parse_stat(stat)
     except Exception as e:
         return {'error': '%s!' % getattr(e, 'message', str(e))}
 
@@ -97,15 +100,19 @@ def all_gpustats():
     hosts = load_hosts()
     for url in hosts:
         try:
-            raw_resp = urlopen(url + '/gpustat')
+            try:
+                raw_resp = urlopen(url + '/gpustat')
+            except ValueError:
+                raw_resp = os.popen(f'ssh {url} "gpustat --json"')
             gpustat = json.loads(raw_resp.read())
             raw_resp.close()
             if not gpustat or 'gpus' not in gpustat:
                 continue
             if hosts[url] != url:
                 gpustat['hostname'] = hosts[url]
-            gpustats.append(gpustat)
+            gpustats.append(parse_stat(gpustat))
         except Exception as e:
+            print(type(e))
             print('Error: %s getting gpustat from %s' %
                   (getattr(e, 'message', str(e)), url))
 
